@@ -38,6 +38,31 @@ class block_sentimentanalysis_task extends \core\task\adhoc_task {
     public function execute()
     {
         global $CFG, $DB;
+        function createRecord($filename,$context, $userid, $fs,$sentimentdir,$assign_name,$datetime){
+            $record = new \stdClass();
+            $record->filearea   = 'private';
+            $record->component  = 'user';
+            $record->filepath   = '\\sentimentanalysis\\';
+            $record->itemid     = 0;
+            $record->contextid  = $context->id;
+            $record->userid     = $userid;
+            // Moodle function that gets the "next" unused filename.  Shouldn't be an issue as we are timestamping
+            //  our files with a datetime.
+            $record->filename = $fs->get_unused_filename($context->id, $record->component, $record->filearea,
+                    $record->itemid, $record->filepath, "{$assign_name}_{$datetime->format('Y-m-d-H:i:s')}.pdf");
+            // Ensure file is readable/exists.
+            if (!is_readable("{$sentimentdir}/{$filename}"))
+            {
+                mtrace("... File {$sentimentdir}/{$filename} does not exist or is not readable.");
+                return;
+            }
+            if ($fs->create_file_from_pathname($record, "{$sentimentdir}/{$filename}"))
+            {
+                mtrace("... File uploaded successfully as {$record->filename}.");
+            } else {
+                mtrace("... Unknown failure during creation.");
+            }
+        }
 
         // Custom data returned as decoded json as defined in classes\task\adhoc_task.
         $custom_data = $this->get_custom_data();
@@ -112,29 +137,10 @@ class block_sentimentanalysis_task extends \core\task\adhoc_task {
             $context = context_user::instance($userid);
 
             // Prepare file record object
-            $record = new \stdClass();
-            $record->filearea   = 'private';
-            $record->component  = 'user';
-            $record->filepath   = '\\sentimentanalysis\\';
-            $record->itemid     = 0;
-            $record->contextid  = $context->id;
-            $record->userid     = $userid;
-            // Moodle function that gets the "next" unused filename.  Shouldn't be an issue as we are timestamping
-            //  our files with a datetime.
-            $record->filename = $fs->get_unused_filename($context->id, $record->component, $record->filearea,
-                    $record->itemid, $record->filepath, "{$assign_name}_{$datetime->format('Y-m-d-H:i:s')}.pdf");
-            // Ensure file is readable/exists.
-            if (!is_readable("{$sentimentdir}/{$filename}"))
-            {
-                mtrace("... File {$sentimentdir}/{$filename} does not exist or is not readable.");
-                return;
-            }
-            if ($fs->create_file_from_pathname($record, "{$sentimentdir}/{$filename}"))
-            {
-                mtrace("... File uploaded successfully as {$record->filename}.");
-            } else {
-                mtrace("... Unknown failure during creation.");
-            }
+            createRecord($filename, $context, $userid, $fs,$sentimentdir,$assign_name,$datetime)
+            $filename='output.csv'
+            createRecord($filename, $context, $userid, $fs,$sentimentdir,$assign_name,$datetime)
+
              // Clean up temp folder by getting rid of all files.
             $files = glob($sentimentdir . '\\*');
             foreach($files as $file)
