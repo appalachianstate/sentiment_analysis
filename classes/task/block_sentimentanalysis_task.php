@@ -38,7 +38,7 @@ class block_sentimentanalysis_task extends \core\task\adhoc_task {
     public function execute()
     {
         global $CFG, $DB;
-        function createRecord($filename,$context, $userid, $fs,$sentimentdir,$assign_name,$datetime){
+        function createRecord($filename,$context, $userid, $fs,$sentimentdir,$assign_name,$datetime,$ext){
             $record = new \stdClass();
             $record->filearea   = 'private';
             $record->component  = 'user';
@@ -49,7 +49,7 @@ class block_sentimentanalysis_task extends \core\task\adhoc_task {
             // Moodle function that gets the "next" unused filename.  Shouldn't be an issue as we are timestamping
             //  our files with a datetime.
             $record->filename = $fs->get_unused_filename($context->id, $record->component, $record->filearea,
-                    $record->itemid, $record->filepath, "{$assign_name}_{$datetime->format('Y-m-d-H:i:s')}.pdf");
+                    $record->itemid, $record->filepath, "{$assign_name}_{$datetime->format('Y-m-d-H:i:s')}.$ext");
             // Ensure file is readable/exists.
             if (!is_readable("{$sentimentdir}/{$filename}"))
             {
@@ -137,9 +137,11 @@ class block_sentimentanalysis_task extends \core\task\adhoc_task {
             $context = context_user::instance($userid);
 
             // Prepare file record object
-            createRecord($filename, $context, $userid, $fs,$sentimentdir,$assign_name,$datetime)
-            $filename='output.csv'
-            createRecord($filename, $context, $userid, $fs,$sentimentdir,$assign_name,$datetime)
+            $ext="pdf";
+            createRecord($filename, $context, $userid, $fs,$sentimentdir,$assign_name,$datetime,$ext);
+            $filename = 'output.csv';
+            $ext="csv";
+            createRecord($filename, $context, $userid, $fs,$sentimentdir,$assign_name,$datetime,$ext);
 
              // Clean up temp folder by getting rid of all files.
             $files = glob($sentimentdir . '\\*');
