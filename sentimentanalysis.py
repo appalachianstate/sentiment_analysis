@@ -86,7 +86,7 @@ def print_report(studentSentimentDict, overallSentiment, assignmentName):
     y = get_next_valid_y(reportPDF, y)
     reportPDF.drawString(125, y, str(overallSentiment.subjectivity))
     y = get_next_valid_y(reportPDF, y)
-    reportPDF.drawString(125,y,"Green=Positive, Grey=Neutral, Red=Negative")
+    reportPDF.drawString(125,y,"Green=Positive (>.05), Grey=Neutral, Red=Negative(<-.05)")
     y = get_next_valid_y(reportPDF, y)
     reportPDF.drawString(125,y,"Subjectivity: Scale 0=Objective, 1=Very Subjective ")
 
@@ -113,7 +113,7 @@ def print_report(studentSentimentDict, overallSentiment, assignmentName):
         y = get_next_valid_y(reportPDF, y)
         reportPDF.drawString(125, y, str(sentiment.subjectivity))
         y = get_next_valid_y(reportPDF, y)
-        reportPDF.drawString(125,y,"Green=Positive, Grey=Neutral, Red=Negative")
+        reportPDF.drawString(125,y,"Green=Positive (>.05), Grey=Neutral, Red=Negative(<-.05)")
         y = get_next_valid_y(reportPDF, y)
         reportPDF.drawString(125,y,"Subjectivity: Scale 0=Objective, 1=Very Subjective ")
         y = get_next_valid_y(reportPDF, y)
