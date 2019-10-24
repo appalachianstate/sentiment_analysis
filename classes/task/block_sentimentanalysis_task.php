@@ -64,7 +64,7 @@ class block_sentimentanalysis_task extends \core\task\adhoc_task {
     public function execute()
     {
         global $CFG, $DB;
-       
+
         // Custom data returned as decoded json as defined in classes\task\adhoc_task.
         $custom_data = $this->get_custom_data();
         // if no path has been specified, default to symbolic link
@@ -138,9 +138,11 @@ class block_sentimentanalysis_task extends \core\task\adhoc_task {
             $context = context_user::instance($userid);
 
             // Prepare file record object
-            create_record($filename, $context, $userid, $fs,$sentimentdir,$assign_name,$datetime)
-            $filename='output.csv'
-            create_record($filename, $context, $userid, $fs,$sentimentdir,$assign_name,$datetime)
+            $ext="pdf";
+            createRecord($filename, $context, $userid, $fs,$sentimentdir,$assign_name,$datetime,$ext);
+            $filename = 'output.csv';
+            $ext="csv";
+            createRecord($filename, $context, $userid, $fs,$sentimentdir,$assign_name,$datetime,$ext);
 
              // Clean up temp folder by getting rid of all files.
             $files = glob($sentimentdir . '\\*');
