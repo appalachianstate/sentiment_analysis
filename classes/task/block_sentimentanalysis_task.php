@@ -139,10 +139,10 @@ class block_sentimentanalysis_task extends \core\task\adhoc_task {
 
             // Prepare file record object
             $ext="pdf";
-            create_record($filename, $context, $userid, $fs,$sentimentdir,$assign_name,$datetime,$ext);
+            $this->create_record($filename, $context, $userid, $fs,$sentimentdir,$assign_name,$datetime,$ext);
             $filename = 'output.csv';
             $ext="csv";
-            create_record($filename, $context, $userid, $fs,$sentimentdir,$assign_name,$datetime,$ext);
+            $this->create_record($filename, $context, $userid, $fs,$sentimentdir,$assign_name,$datetime,$ext);
 
              // Clean up temp folder by getting rid of all files.
             $files = glob($sentimentdir . '\\*');
