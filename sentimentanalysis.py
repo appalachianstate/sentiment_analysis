@@ -18,6 +18,8 @@ import codecs
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter, A4
 from reportlab.lib.colors import HexColor
+import csv
+import re
 
 # Check that a command line argument is present.
 if len(sys.argv) != 2:
@@ -61,7 +63,7 @@ def get_polarity_color(polarity):
 # Create the body of the report named report_name.
 #   Sentiments_list is the list of individual sentiment analyses
 #   and overall is the overall sentiment of the list.
-def print_report(studentSentimentDict, overallSentiment):
+def print_report(studentSentimentDict, overallSentiment, assignmentName):
     # PDF lab canvas creation
     reportPDF = canvas.Canvas("output.pdf", pagesize=letter)
     # although width is unused in this script it's apparently necessary for report lab.
@@ -69,6 +71,8 @@ def print_report(studentSentimentDict, overallSentiment):
     # decrease y for the top of page margin.
     y = height - 100
     # Print the overall sentiment analysis on the first page.
+    reportPDF.drawString(100,y, "Assignment: "+assignmentName)
+    y = get_next_valid_y(reportPDF, y)    
     reportPDF.drawString(100, y, "Overall Sentiment: ")
     y = get_next_valid_y(reportPDF, y)
     reportPDF.drawString(125, y, "Polarity:")
@@ -81,10 +85,19 @@ def print_report(studentSentimentDict, overallSentiment):
     reportPDF.drawString(125, y, "Subjectivity:")
     y = get_next_valid_y(reportPDF, y)
     reportPDF.drawString(125, y, str(overallSentiment.subjectivity))
+    y = get_next_valid_y(reportPDF, y)
+    reportPDF.drawString(125,y,"Green=Positive, Grey=Neutral, Red=Negative")
+    y = get_next_valid_y(reportPDF, y)
+    reportPDF.drawString(125,y,"Subjectivity: Scale 0=Objective, 1=Very Subjective ")
+
     # new page.
     reportPDF.showPage()
+    # create array for output to csv
+    csvSave=[]
+    csvSave.append(["assignment","user","sentiment","subjectivity"])
     # Sentiment Analysis by text file/ student
     for user, sentiment in studentSentimentDict.iteritems():
+        username=user.split("(")[0]
         y = height - 100
         reportPDF.drawString(100, y, "Student Name: ")
         reportPDF.drawString(225, y, user)
@@ -100,12 +113,21 @@ def print_report(studentSentimentDict, overallSentiment):
         y = get_next_valid_y(reportPDF, y)
         reportPDF.drawString(125, y, str(sentiment.subjectivity))
         y = get_next_valid_y(reportPDF, y)
+        reportPDF.drawString(125,y,"Green=Positive, Grey=Neutral, Red=Negative")
+        y = get_next_valid_y(reportPDF, y)
+        reportPDF.drawString(125,y,"Subjectivity: Scale 0=Objective, 1=Very Subjective ")
+        y = get_next_valid_y(reportPDF, y)
         reportPDF.drawString(125, y, "Assessments:")
         for word in sentiment.assessments:
             y = get_next_valid_y(reportPDF, y)
             reportPDF.drawString(125, y, str(word))
         reportPDF.showPage()
+        csvSave.append([assignmentName,username,sentiment.polarity,sentiment.subjectivity])
     reportPDF.save()
+    with open('output.csv','w') as writeFile:
+        writer=csv.writer(writeFile)
+        writer.writerows(csvSave)
+
 
 
 # Create the sentiments dictionary.
@@ -113,11 +135,18 @@ studentSentimentsDict = dict()
 overallText = ""
 # Change working directory to the dir that was passed in.
 os.chdir(directory)
+#look for csv in directory
+assignmentName=""
 # Iterate over each text file in the directory
 for fileName in glob.iglob('*.txt'):
     # Username will be the first part of the filename for the report.
     userName = fileName.split('_')[0]
     userFullName = fileName.split('_')[1]
+    upos=fileName.find(userFullName)
+    upos+=len(userFullName)
+    apos=len(fileName)-4
+    assignmentName=fileName[upos+1:apos]
+    assignmentName=assignmentName.replace("_"," ")
     fileText = ""
     with codecs.open(fileName, "r",encoding='utf-8', errors='ignore') as fileData:
         # Read in the text file.
@@ -127,7 +156,7 @@ for fileName in glob.iglob('*.txt'):
         # Convert to textblob object
         textBlobOutput = TextBlob(fileText)
         # Add sentiment assessment to sentiments dict under name <userfullname (username)>
-        dictIndex = userFullName + " " + "(" + userName + ")"
+        dictIndex = userFullName + " " + "(" + userName + ")"+" - "+assignmentName
         # Add the sentiment assessment of the text blob to the student sentiment dictionary under the student's name.
         studentSentimentsDict[dictIndex] = textBlobOutput.sentiment_assessments
 # Convert entire text into a textblob object
@@ -135,4 +164,4 @@ overallTextBlobOutput = TextBlob(overallText)
 # Get the sentiment assessment of the whole thing.
 overallSentiment = overallTextBlobOutput.sentiment_assessments
 # Create and save the report.
-print_report(studentSentimentsDict, overallSentiment)
+print_report(studentSentimentsDict, overallSentiment,assignmentName)
