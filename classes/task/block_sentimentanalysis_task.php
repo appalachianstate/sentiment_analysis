@@ -84,7 +84,7 @@ class block_sentimentanalysis_task extends \core\task\adhoc_task {
         foreach ($assignmentids as $assignment)
         {
             // We need the users' names and their online text submissions for this assignment.
-            $sql = "SELECT usr.username, usr.firstname, usr.lastname, t.onlinetext
+            $sql = "SELECT usr.username, usr.firstname, usr.lastname, usr.email, t.onlinetext
                 FROM mdl_assignsubmission_onlinetext t
                 INNER JOIN mdl_assign_submission sub on sub.id = t.submission
                 INNER JOIN mdl_user usr on usr.id = sub.userid
@@ -116,7 +116,9 @@ class block_sentimentanalysis_task extends \core\task\adhoc_task {
                 // Variables for readability
                 $username = $row->username;
                 $name = "{$row->firstname} {$row->lastname}";
-                $myfile = fopen("{$sentimentdir}/{$username}_{$name}_{$assign_name}.txt", "w");
+                $email = "{$row->email}";
+                mtrace("...email={$email}");
+                $myfile = fopen("{$sentimentdir}/{$username}_{$name}_{$email}_{$assign_name}.txt", "w");
                 // Strip the html tags off the body of the text submission.
                 fwrite($myfile, strip_tags($row->onlinetext));
                 fclose($myfile);
@@ -145,7 +147,7 @@ class block_sentimentanalysis_task extends \core\task\adhoc_task {
             $this->create_record($filename, $context, $userid, $fs,$sentimentdir,$assign_name,$datetime,$ext);
 
              // Clean up temp folder by getting rid of all files.
-            $files = glob($sentimentdir . '\\*');
+            $files = glob($sentimentdir . '/*');
             foreach($files as $file)
             {
                 if (is_file($file))
