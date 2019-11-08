@@ -117,7 +117,6 @@ class block_sentimentanalysis_task extends \core\task\adhoc_task {
                 $username = $row->username;
                 $name = "{$row->firstname} {$row->lastname}";
                 $email = "{$row->email}";
-                mtrace("...email={$email}");
                 $myfile = fopen("{$sentimentdir}/{$username}_{$name}_{$email}_{$assign_name}.txt", "w");
                 // Strip the html tags off the body of the text submission.
                 fwrite($myfile, strip_tags($row->onlinetext));
