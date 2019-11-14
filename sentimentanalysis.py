@@ -94,10 +94,11 @@ def print_report(studentSentimentDict, overallSentiment, assignmentName):
     reportPDF.showPage()
     # create array for output to csv
     csvSave=[]
-    csvSave.append(["assignment","user","sentiment","subjectivity"])
+    csvSave.append(["assignment","user","email","sentiment","subjectivity"])
     # Sentiment Analysis by text file/ student
     for user, sentiment in studentSentimentDict.iteritems():
         username=user.split("(")[0]
+        email=user.split("(",1)[1].split(')')[0]
         y = height - 100
         reportPDF.drawString(100, y, "Student Name: ")
         reportPDF.drawString(225, y, user)
@@ -122,7 +123,7 @@ def print_report(studentSentimentDict, overallSentiment, assignmentName):
             y = get_next_valid_y(reportPDF, y)
             reportPDF.drawString(125, y, str(word))
         reportPDF.showPage()
-        csvSave.append([assignmentName,username,sentiment.polarity,sentiment.subjectivity])
+        csvSave.append([assignmentName,username,email,sentiment.polarity,sentiment.subjectivity])
     reportPDF.save()
     with open('output.csv','w') as writeFile:
         writer=csv.writer(writeFile)
@@ -142,8 +143,9 @@ for fileName in glob.iglob('*.txt'):
     # Username will be the first part of the filename for the report.
     userName = fileName.split('_')[0]
     userFullName = fileName.split('_')[1]
-    upos=fileName.find(userFullName)
-    upos+=len(userFullName)
+    email=fileName.split('_')[2]
+    upos=fileName.find(email)
+    upos+=len(email)
     apos=len(fileName)-4
     assignmentName=fileName[upos+1:apos]
     assignmentName=assignmentName.replace("_"," ")
@@ -156,7 +158,7 @@ for fileName in glob.iglob('*.txt'):
         # Convert to textblob object
         textBlobOutput = TextBlob(fileText)
         # Add sentiment assessment to sentiments dict under name <userfullname (username)>
-        dictIndex = userFullName + " " + "(" + userName + ")"+" - "+assignmentName
+        dictIndex = userFullName + " " + "(" + email + ")"+" - "+assignmentName
         # Add the sentiment assessment of the text blob to the student sentiment dictionary under the student's name.
         studentSentimentsDict[dictIndex] = textBlobOutput.sentiment_assessments
 # Convert entire text into a textblob object
