@@ -1,175 +1,230 @@
 <?php
-// This file is part of Moodle - http://moodle.org/
-//
-// Moodle is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Moodle is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+    // This file is part of Moodle - http://moodle.org/
+    //
+    // Moodle is free software: you can redistribute it and/or modify
+    // it under the terms of the GNU General Public License as published by
+    // the Free Software Foundation, either version 3 of the License, or
+    // (at your option) any later version.
+    //
+    // Moodle is distributed in the hope that it will be useful,
+    // but WITHOUT ANY WARRANTY; without even the implied warranty of
+    // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    // GNU General Public License for more details.
+    //
+    // You should have received a copy of the GNU General Public License
+    // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
-/**
- * block_sentimentanalysis_task
- *
- * @author      Kara Beason <beasonke@appstate.edu>
- * @copyright   (c) 2019 Appalachian State Universtiy, Boone, NC
- * @license     GNU General Public License version 3
- * @package     block_sentimentanalysis
- */
+    /**
+     * block_sentimentanalysis_task
+     *
+     * @author      Kara Beason <beasonke@appstate.edu>
+     * @copyright   (c) 2019 Appalachian State Universtiy, Boone, NC
+     * @license     GNU General Public License version 3
+     * @package     block_sentimentanalysis
+     */
 
-namespace block_sentimentanalysis\task;
-use \context_user;
+    namespace block_sentimentanalysis\task;
+    use \stdClass;
+    use \context_user;
+    use \core\message\message;
 
-defined('MOODLE_INTERNAL') || die();
+    defined('MOODLE_INTERNAL') || die();
 
-/**
- *  Ad hoc task executes a python script to analyze online text submissions for a set of assignments configured in the sentiment
- *  analsysis block settings.  Assignments are analyzed for sentiment and the resulting report(s) is saved into the executing
- *  user's private file area.
- */
-class block_sentimentanalysis_task extends \core\task\adhoc_task {
 
-    private function create_record($filename,$context, $userid, $fs,$sentimentdir,$assign_name,$datetime,$ext){
-        $record = new \stdClass();
-        $record->filearea   = 'private';
-        $record->component  = 'user';
-        $record->filepath   = '\\sentimentanalysis\\';
-        $record->itemid     = 0;
-        $record->contextid  = $context->id;
-        $record->userid     = $userid;
-        // Moodle function that gets the "next" unused filename.  Shouldn't be an issue as we are timestamping
-        //  our files with a datetime.
-        $record->filename = $fs->get_unused_filename($context->id, $record->component, $record->filearea,
-                $record->itemid, $record->filepath, "{$assign_name}_{$datetime->format('Y-m-d-H:i:s')}.$ext");
-        // Ensure file is readable/exists.
-        if (!is_readable("{$sentimentdir}/{$filename}"))
-        {
-            mtrace("... File {$sentimentdir}/{$filename} does not exist or is not readable.");
-            return;
-        }
-        if ($fs->create_file_from_pathname($record, "{$sentimentdir}/{$filename}"))
-        {
-            mtrace("... File uploaded successfully as {$record->filename}.");
-        } else {
-            mtrace("... Unknown failure during creation.");
-        }
-    }
-
-    public function execute()
+    /**
+     * For assignment ids specified in task custom data, export the
+     * online-text submissions to individual files in a working dir
+     * and execute a python script to do sentiment analysis on each
+     * as well all of them collectively. Put resulting report output
+     * in user's private file area.
+     */
+    class block_sentimentanalysis_task extends \core\task\adhoc_task
     {
-        global $CFG, $DB;
-        
-        // Custom data returned as decoded json as defined in classes\task\adhoc_task.
-        $custom_data = $this->get_custom_data();
-        // if no path has been specified, default to symbolic link
-        if ($custom_data->pythonpath == '')
-        {
-            $pythonpath = 'python';
-        }
-        else
-        {
-            $pythonpath = $custom_data->pythonpath;
-        }
-        $userid = $custom_data->user;
-        $assignmentids = $custom_data->assignmentids;
-        // Datetime to differentiate between iterations of the task reports.
-        $datetime = new \DateTime('NOW');
-        // Iterate over assignments and do the sentiment analysis.
-        foreach ($assignmentids as $assignment)
-        {
-            // We need the users' names and their online text submissions for this assignment.
-            $sql = "SELECT usr.username, usr.firstname, usr.lastname, usr.email, t.onlinetext
-                FROM mdl_assignsubmission_onlinetext t
-                INNER JOIN mdl_assign_submission sub on sub.id = t.submission
-                INNER JOIN mdl_user usr on usr.id = sub.userid
-                WHERE t.assignment = '$assignment' and sub.status = 'submitted'";
-            // Execute the sql.
-            $text_submissions = $DB->get_recordset_sql($sql);
-            // if result contains zero records, move on to the next assignment.
-            //  There are't any submissions for this assignment (yet).
-            if ($text_submissions->valid() == false)
-            {
-                continue;
-            }
-            // We want the readable name of the assignment, ie. "Assignment 1" instead it's id
-            //  which wouldn't be meaningful to the person reading the report we are generating.
-            $sql = "SELECT asn.name
-                    FROM mdl_assign asn
-                    WHERE asn.id = $assignment";
-            // We expect only a single record (name) back.
-            $record = $DB->get_record_sql($sql);
-            // Get the name and format it to be used in a file name.
-            $assign_name = str_replace(" ", "_", $record->name);
-            
-            // Make temp directory and write all assignment submissions to it.
-            //  so the python script can just iterate over the whole directory.
-            $sentimentdir = make_temp_directory('sentimentanalysis');
-            foreach ($text_submissions as $record => $row)
-            {
-                // Write the file as <username>_<name>_<assignment name>.txt
-                // Variables for readability
-                $username = $row->username;
-                $name = "{$row->firstname} {$row->lastname}";
-                $email = "{$row->email}";
-                $myfile = fopen("{$sentimentdir}/{$username}_{$name}_{$email}_{$assign_name}.txt", "w");
-                // Strip the html tags off the body of the text submission.
-                fwrite($myfile, strip_tags($row->onlinetext));
-                fclose($myfile);
-            }
-            // Execute python script to process the text submissions for this assignment.
-            exec("export PYTHONPATH='{$CFG->dirroot}/blocks/sentimentanalysis/packages'; {$pythonpath} {$CFG->dirroot}/blocks/sentimentanalysis/sentimentanalysis.py {$sentimentdir}", $output, $return);
 
-            // Debugging output can be seen when cron is executed.
-            if (!$return) {
+        const DEFAULT_PYTHON_PATH   = "python";
+
+
+        public function execute()
+        {
+            global $CFG, $DB;
+
+            // if no path has been specified, use default
+            $block_config = get_config('block_sentimentanalysis');
+            $pythonpath = empty($block_config->pythonpath) ? self::DEFAULT_PYTHON_PATH : $block_config->pythonpath;
+
+            $taskdir = make_temp_directory("sentimentanalysis/{$this->get_id()}");
+            if (!$taskdir) {
+                mtrace("... Unable to create task temporary directory.");
+                return;
+            }
+
+            // Assignment id values passed in task's custom data as
+            // an array. Iterate over assignments and do the analysis,
+            // putting output in specific dir for each task/assignment
+            // combination.
+            $assignids = $this->get_custom_data();
+            foreach ($assignids as $assignid)
+            {
+
+                $assignrec = $DB->get_record('assign', array('id' => $assignid));
+                if (!$assignrec) {
+                    mtrace("... Unable to create assign temporary directory.");
+                    continue;
+                }
+
+                $sql = "SELECT olt.id, usr.username, usr.firstname, usr.lastname, olt.onlinetext
+                    FROM mdl_assignsubmission_onlinetext olt
+                    INNER JOIN mdl_assign_submission sub ON sub.id = olt.submission
+                    INNER JOIN mdl_user usr ON usr.id = sub.userid
+                    WHERE olt.assignment = :assignid AND sub.status = 'submitted'";
+
+                $rs = $DB->get_recordset_sql($sql, array("assignid" => $assignid));
+                if (!$rs->valid()) {
+                    $rs->close();
+                    continue;
+                }
+
+                // Make temp directory and write all assignment submissions to it
+                // so the python script can just iterate over files in directory.
+                $assigndir = make_temp_directory("sentimentanalysis/{$this->get_id()}/{$assignid}");
+                $collective = fopen("{$assigndir}/collective.txt", "w");
+                fwrite($collective, $assignrec->name . "\n");
+
+                // Create a text file for each submission with any HTML tags
+                // removed, and submit it for analysis
+                foreach ($rs as $record) {
+
+                    $file = fopen("{$assigndir}/{$record->id}.txt", "w");
+                    fwrite($file, "{$record->username}\n");
+                    fwrite($file, "{$record->lastname}, {$record->firstname}\n");
+                    fwrite($file, strip_tags($record->onlinetext));
+                    fclose($file);
+
+                    fwrite($collective, strip_tags($record->onlinetext) . "\n");
+
+                }
+                fclose($collective);
+                $rs->close();
+
+                // Execute python script to process the text submissions for this assignment.
+                $output = null;
+                $return = null;
+
+                exec("export PYTHONPATH='{$CFG->dirroot}/blocks/sentimentanalysis/packages'; {$pythonpath} {$CFG->dirroot}/blocks/sentimentanalysis/sentimentanalysis.py '{$assigndir}'", $output, $return);
+                if ($return != 0) {
+                    mtrace("... Sentiment analylsis failed on task id {$this->get_id()}, assign id {$record->id}.");
+                    continue;
+                }
+
                 mtrace("... Sentiment analylsis completed.");
-            } else {
-                mtrace("... Unknown failure during sentiment analysis.");
+
+                // Create file records to save the files produced by the python script
+                // into the teacher's private file area.
+                $this->create_file_records($assigndir, $assignrec->name);
+
             }
 
-            // Create a file record and save the file produced by the python script into the teacher's private file area.
+            $this->notify_user();
+
+            // Clean up after ourselves
+            $this->removetempdir($taskdir);
+
+        }
+
+        /**
+         * Put the report output files in the user's private file area
+         *
+         * @param string $assigndir Path to the task-assignment working directory
+         * @param string $assignname Assignment name
+         */
+        private function create_file_records($assigndir, $assignname)
+        {
+
+            $now = time();
+
+            //$filename, $assignmentdir, $assign_name, $datetime, $ext
             $fs = get_file_storage();
-            // Name of the file expected from the python script.
-            $filename = 'output.pdf';
+            $userid = $this->get_userid();
             $context = context_user::instance($userid);
 
-            // Prepare file record object
-            $ext="pdf";
-            $this->create_record($filename, $context, $userid, $fs,$sentimentdir,$assign_name,$datetime,$ext);
-            $filename = 'output.csv';
-            $ext="csv";
-            $this->create_record($filename, $context, $userid, $fs,$sentimentdir,$assign_name,$datetime,$ext);
+            foreach(array(".pdf", ".csv") as $extension) {
 
-             // Clean up temp folder by getting rid of all files.
-            $files = glob($sentimentdir . '/*');
-            foreach($files as $file)
-            {
-                if (is_file($file))
-                {
-                    unlink($file);
+                $filename = "output{$extension}";
+                if (!is_readable("{$assigndir}/{$filename}")) {
+                    mtrace("... File {$assigndir}/{$filename} not readable.");
+                    continue;
+                }
+
+                $record = new stdClass();
+                $record->filearea   = "private";
+                $record->component  = "user";
+                $record->filepath   = "/Sentiment Analysis/Task-{$this->get_id()} (" . date("m-d-y Hi", $now) . ")/";
+                $record->itemid     = 0;
+                $record->contextid  = $context->id;
+                $record->userid     = $userid;
+
+                $record->filename   = $fs->get_unused_filename(
+                    $context->id, $record->component, $record->filearea, $record->itemid, $record->filepath,
+                    "{$assignname}{$extension}");
+
+                if (!$fs->create_file_from_pathname($record, "{$assigndir}/{$filename}")) {
+                    mtrace("... Error creating file {$assigndir}/{$filename}.");
+                }
+
+            }
+
+        }
+
+        /**
+         * Notify user to let them know their reports are completed
+         * and uploaded in their private file section.
+         */
+        private function notify_user()
+        {
+
+            $message = new message();
+
+            $message->component         = 'moodle';
+            $message->name              = 'instantmessage';
+            $message->userfrom          = get_admin();
+            $message->userto            = $this->get_userid();
+            $message->subject           = 'Sentiment Analysis Complete';
+            $message->fullmessageformat = FORMAT_PLAIN;
+            $message->smallmessage      =
+            $message->fullmessage       =
+            $message->fullmessagehtml   = 'Please check the "Sentiment Analysis" folder in your private file area to view reports.';
+            $message->fullmessagehtml   = '<p>' . $message->fullmessagehtml . '</p>';
+
+            message_send($message);
+
+        }
+
+        /**
+         * Remove all contents in our temp directory, then the directory itself
+         *
+         * @param string $dirpath Path to the working directory
+         */
+        private function removetempdir($dirpath)
+        {
+            global $CFG;
+
+            if ((stripos($dirpath, $CFG->tempdir) !== 0) || !is_dir($dirpath)) {
+                return;
+            }
+
+            foreach(scandir($dirpath) as $dirobject) {
+                if ($dirobject == "." || $dirobject == "..") {
+                    continue;
+                }
+                if (is_dir("{$dirpath}/{$dirobject}") && !is_link("{$dirpath}/{$dirobject}")) {
+                    $this->removetempdir("{$dirpath}/{$dirobject}");
+                } else {
+                    unlink("{$dirpath}/{$dirobject}");
                 }
             }
+
+            rmdir($dirpath);
+
         }
 
-        // Notify user to let them know their reports are completed and uploaded in their private file section.
-        $message = new \core\message\message();
-        $message->component = 'moodle';
-        $message->name = 'instantmessage';
-        $message->userfrom = 2; // Admin
-        $message->userto = $userid;
-        $message->subject = 'Sentiment Analysis Complete';
-        $message->fullmessage = 'Please check the "Sentiment Analysis" folder in your private file area to view reports.';
-        $message->fullmessageformat = FORMAT_MARKDOWN;
-        $message->fullmessagehtml = '<p>Please check the "Sentiment Analysis" folder in your private file area to view reports.</p>';
-        $message->smallmessage = 'Please check the "Sentiment Analysis" folder in your private file area to view reports.';
-
-        $message->courseid = 4; // This is required in recent versions, use it from 3.2 on https://tracker.moodle.org/browse/MDL-47162
-
-        $messageid = message_send($message);
-        }
     }

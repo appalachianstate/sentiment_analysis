@@ -1,169 +1,169 @@
 # /**
 #  * Sentiment Analysis Task
 #  *
-#  * This python script takes the name of a directory as a command line argument
-#       and analyzes each .txt file in the directory for sentiment.  A report is
-#       produced in the same directory containing the overall sentiment of the
-#       collection of text files, as well as an individual sentiment analysis
-#       of each file.
+#  * This python script runs sentiment analysis on a set of text files
+#  * containing online text assignment submissions. Two output files
+#  * are generated, a .pdf file, and a .csv file. The .pdf file has a
+#  * page for each submission, with its polarity, subjectivity, plus a
+#  * phrase-list. The first page is the collective sentiment assignment
+#  * analysis. The .csv contains a line with four fields for each
+#  * submission with the assignment name, user name, polarity, and
+#  * subjectivity.
+#  *
 #  * @author      Kara Beason <beasonke@appstate.edu>
 #  * @copyright   (c) 2019 Appalachian State University, Boone, NC
 #  * @license     GNU General Public License version 3
 #  */
-from textblob import TextBlob
-import os
-import glob
-import sys
+
 import codecs
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import letter, A4
-from reportlab.lib.colors import HexColor
 import csv
-import re
-
-# Check that a command line argument is present.
-if len(sys.argv) != 2:
-    print("Usage: python sentiments_analysis.py <directory>")
-    exit(0)
-
-directory = str(sys.argv[1])
-
-# Check that the command line argurment is indeed a valid directory.
-if (not os.path.isdir(directory)) or (not os.path.exists(directory)):
-    print("Directory %s is not valid.", directory)
-    exit(0)
+import glob
+import os
+import sys
+from reportlab.lib.colors import HexColor
+from reportlab.lib.pagesizes import LETTER
+from reportlab.pdfgen import canvas
+from textblob import TextBlob
 
 
-# Check the current y position and whether the next line will run off the page.  
-# Return a valid new y value.
-def get_next_valid_y(report, y):
-    width, height = letter
-    if y - 100 < 0:
-        # if the next line would run off the page/into the margin, 
-        #   create a new page and start at the top of the next.
-        report.showPage()
-        y = height - 100
-        return y
-    else:
-        y = y - 15
-        return y
+# Constants --------------------------------------------------
 
+STD_MARGIN  = 100
+STD_INDENT  = 125
+LINE_HEIGHT = 18
+HEADER_POS  = 225
+TOP_OF_PAGE = LETTER[1] - STD_MARGIN
+COLOR_BLACK = HexColor('#000000')
+COLOR_RED   = HexColor('#FF0000')
+COLOR_GREEN = HexColor('#008000')
+COLOR_GRAY  = HexColor('#808080')
+
+
+# Functions --------------------------------------------------
 
 # Determine whether the polarity score (integer passed in)
-#   is negative (green), neutral (grey), or positive (green)
+# is negative (green), neutral (grey), or positive (green)
 def get_polarity_color(polarity):
-    if polarity < -0.05:
-        return '#FF0000'
-    elif polarity > 0.05:
-        return '#008000'
+    if (polarity < -0.05):
+        return COLOR_RED
+    elif (polarity > 0.05):
+        return COLOR_GREEN
     else:
-        return '#808080'
+        return COLOR_GRAY
+# get_polarity_color
 
 
-# Create the body of the report named report_name.
-#   Sentiments_list is the list of individual sentiment analyses
-#   and overall is the overall sentiment of the list.
-def print_report(studentSentimentDict, overallSentiment, assignmentName):
-    # PDF lab canvas creation
-    reportPDF = canvas.Canvas("output.pdf", pagesize=letter)
-    # although width is unused in this script it's apparently necessary for report lab.
-    width, height = letter
-    # decrease y for the top of page margin.
-    y = height - 100
+# Build the output reports
+def build_reports(assignName, collectiveBlob, submissionDict):
+
+    pdfFile = canvas.Canvas("output.pdf", pagesize = LETTER)
+
     # Print the overall sentiment analysis on the first page.
-    reportPDF.drawString(100,y, "Assignment: "+assignmentName)
-    y = get_next_valid_y(reportPDF, y)    
-    reportPDF.drawString(100, y, "Overall Sentiment: ")
-    y = get_next_valid_y(reportPDF, y)
-    reportPDF.drawString(125, y, "Polarity:")
-    y = get_next_valid_y(reportPDF, y)
-    color = get_polarity_color(overallSentiment.polarity)
-    reportPDF.setFillColor(HexColor(color))
-    reportPDF.drawString(125, y, str(overallSentiment.polarity))
-    reportPDF.setFillColor(HexColor('#000000'))
-    y = get_next_valid_y(reportPDF, y)
-    reportPDF.drawString(125, y, "Subjectivity:")
-    y = get_next_valid_y(reportPDF, y)
-    reportPDF.drawString(125, y, str(overallSentiment.subjectivity))
-    y = get_next_valid_y(reportPDF, y)
-    reportPDF.drawString(125,y,"Green=Positive, Grey=Neutral, Red=Negative")
-    y = get_next_valid_y(reportPDF, y)
-    reportPDF.drawString(125,y,"Subjectivity: Scale 0=Objective, 1=Very Subjective ")
+    y  = TOP_OF_PAGE; pdfFile.drawString(STD_MARGIN, y, "Assignment: " + assignName)
+    y -= LINE_HEIGHT; pdfFile.drawString(STD_MARGIN, y, "Overall Sentiment: ")
 
-    # new page.
-    reportPDF.showPage()
-    # create array for output to csv
-    csvSave=[]
-    csvSave.append(["assignment","user","email","sentiment","subjectivity"])
-    # Sentiment Analysis by text file/ student
-    for user, sentiment in studentSentimentDict.iteritems():
-        username=user.split("(")[0]
-        email=user.split("(",1)[1].split(')')[0]
-        y = height - 100
-        reportPDF.drawString(100, y, "Student Name: ")
-        reportPDF.drawString(225, y, user)
-        y = get_next_valid_y(reportPDF, y)
-        reportPDF.drawString(125, y, "Polarity:")
-        y = get_next_valid_y(reportPDF, y)
-        color = get_polarity_color(sentiment.polarity)
-        reportPDF.setFillColor(HexColor(color))
-        reportPDF.drawString(125, y, str(sentiment.polarity))
-        reportPDF.setFillColor(HexColor('#000000'))
-        y = get_next_valid_y(reportPDF, y)
-        reportPDF.drawString(125, y, "Subjectivity:")
-        y = get_next_valid_y(reportPDF, y)
-        reportPDF.drawString(125, y, str(sentiment.subjectivity))
-        y = get_next_valid_y(reportPDF, y)
-        reportPDF.drawString(125,y,"Green=Positive, Grey=Neutral, Red=Negative")
-        y = get_next_valid_y(reportPDF, y)
-        reportPDF.drawString(125,y,"Subjectivity: Scale 0=Objective, 1=Very Subjective ")
-        y = get_next_valid_y(reportPDF, y)
-        reportPDF.drawString(125, y, "Assessments:")
-        for word in sentiment.assessments:
-            y = get_next_valid_y(reportPDF, y)
-            reportPDF.drawString(125, y, str(word))
-        reportPDF.showPage()
-        csvSave.append([assignmentName,username,email,sentiment.polarity,sentiment.subjectivity])
-    reportPDF.save()
-    with open('output.csv','w') as writeFile:
-        writer=csv.writer(writeFile)
-        writer.writerows(csvSave)
+    y -= LINE_HEIGHT; pdfFile.drawString(STD_INDENT, y, "Polarity:")
+    pdfFile.setFillColor(get_polarity_color(collectiveBlob.polarity))
+    y -= LINE_HEIGHT; pdfFile.drawString(STD_INDENT, y, str(collectiveBlob.polarity))
+    pdfFile.setFillColor(COLOR_BLACK)
+
+    y -= LINE_HEIGHT; pdfFile.drawString(STD_INDENT, y, "Subjectivity:")
+    y -= LINE_HEIGHT; pdfFile.drawString(STD_INDENT, y, str(collectiveBlob.subjectivity))
+    y -= LINE_HEIGHT; pdfFile.drawString(STD_INDENT, y, "Green=Positive, Grey=Neutral, Red=Negative")
+    y -= LINE_HEIGHT; pdfFile.drawString(STD_INDENT, y, "Subjectivity: Scale 0=Objective, 1=Very Subjective ")
+
+    # Close current page.
+    pdfFile.showPage()
+
+    # Create list for output to csv.
+    csvList = [ [ "assignment", "user", "polarity", "subjectivity" ] ]
+
+    # Sentiment Analysis by text file/student, each student
+    # on their own page
+    for name, blob in submissionDict.iteritems():
+
+        y  = TOP_OF_PAGE; pdfFile.drawString(STD_MARGIN, y, "Student Name: {}".format(name))
+        y -= LINE_HEIGHT; pdfFile.drawString(STD_INDENT, y, "")
+        y -= LINE_HEIGHT; pdfFile.drawString(STD_INDENT, y, "Polarity:")
+
+        pdfFile.setFillColor(get_polarity_color(blob.polarity))
+        y -= LINE_HEIGHT; pdfFile.drawString(STD_INDENT, y, str(blob.polarity))
+        pdfFile.setFillColor(COLOR_BLACK)
+
+        y -= LINE_HEIGHT; pdfFile.drawString(STD_INDENT, y, "Subjectivity:")
+        y -= LINE_HEIGHT; pdfFile.drawString(STD_INDENT, y, str(blob.subjectivity))
+        y -= LINE_HEIGHT; pdfFile.drawString(STD_INDENT, y, "Green=Positive, Grey=Neutral, Red=Negative")
+        y -= LINE_HEIGHT; pdfFile.drawString(STD_INDENT, y, "Subjectivity: Scale 0=Objective, 1=Very Subjective")
+        y -= LINE_HEIGHT; pdfFile.drawString(STD_INDENT, y, "Assessments:")
+        y -= LINE_HEIGHT
+
+        for word in blob.sentiment_assessments.assessments:
+            y -= LINE_HEIGHT
+            if (y < STD_MARGIN):
+                pdfFile.showPage()
+                y  = TOP_OF_PAGE; pdfFile.drawString(STD_MARGIN, y, "Student Name: {} continued..".format(name))
+                y -= 2 * LINE_HEIGHT
+
+            pdfFile.drawString(STD_INDENT, y, str(word))
+        # for word ...
+
+        pdfFile.showPage()
+        csvList.append([ assignName, name, blob.polarity, blob.subjectivity ])
+    # for name, blob...
+
+    pdfFile.save()
+
+    with open('output.csv','w') as csvFile:
+        writer = csv.writer(csvFile)
+        writer.writerows(csvList)
+# build_reports
 
 
+# ------------------------------ Execution begins here ------------------------------
 
-# Create the sentiments dictionary.
-studentSentimentsDict = dict()
-overallText = ""
-# Change working directory to the dir that was passed in.
-os.chdir(directory)
-#look for csv in directory
-assignmentName=""
-# Iterate over each text file in the directory
-for fileName in glob.iglob('*.txt'):
-    # Username will be the first part of the filename for the report.
-    userName = fileName.split('_')[0]
-    userFullName = fileName.split('_')[1]
-    email=fileName.split('_')[2]
-    upos=fileName.find(email)
-    upos+=len(email)
-    apos=len(fileName)-4
-    assignmentName=fileName[upos+1:apos]
-    assignmentName=assignmentName.replace("_"," ")
-    fileText = ""
-    with codecs.open(fileName, "r",encoding='utf-8', errors='ignore') as fileData:
-        # Read in the text file.
-        fileText += fileData.read()
-        # Add contents of text file to overall text.
-        overallText += fileText
-        # Convert to textblob object
-        textBlobOutput = TextBlob(fileText)
-        # Add sentiment assessment to sentiments dict under name <userfullname (username)>
-        dictIndex = userFullName + " " + "(" + email + ")"+" - "+assignmentName
-        # Add the sentiment assessment of the text blob to the student sentiment dictionary under the student's name.
-        studentSentimentsDict[dictIndex] = textBlobOutput.sentiment_assessments
-# Convert entire text into a textblob object
-overallTextBlobOutput = TextBlob(overallText)
-# Get the sentiment assessment of the whole thing.
-overallSentiment = overallTextBlobOutput.sentiment_assessments
-# Create and save the report.
-print_report(studentSentimentsDict, overallSentiment,assignmentName)
+
+# Check that a command line argument is present.
+if (len(sys.argv) != 2):
+    print("Usage: python sentiments_analysis.py <directory>")
+    exit(1)
+
+# Check that the command line argurment is indeed a
+# valid directory, and make that the working dir
+if (not os.path.isdir(sys.argv[1])):
+    print "Directory not valid: {}".format(sys.argv[1])
+    exit(1)
+
+os.chdir(sys.argv[1])
+
+if (not os.path.isfile('collective.txt')):
+    print "Input file not found in directory: {}".format(sys.argv[1])
+    exit(1)
+
+# Expect to find any number of text files in this dir named [n].txt
+# where [n] is the unique submission id value. The first line of each
+# submission file will be the associated username, the second is the
+# user's formatted [lastname, firstname], and the remaining lines are
+# the online text submission. Also present in the dir is a file named
+# collective.txt, the first line of which has the assignment name, and
+# remaining lines are the the collective submissions.
+
+# Start with the collective file
+with codecs.open('collective.txt', 'r', 'utf-8', 'strict') as infile:
+    lines = infile.readlines()
+assignName = lines.pop(0).rstrip('\n')
+collectiveBlob = TextBlob(str().join(lines).strip())
+
+# Now the individual submissions. Store them in a dictionary keyed by
+# the formatted name plus username
+submissionDict = {}
+for filename in glob.iglob('[0-9]*.txt'):
+    with codecs.open(filename, 'r', 'utf-8', 'strict') as infile:
+        lines = infile.readlines()
+    username = lines.pop(0).rstrip('\n')
+    formattedName = lines.pop(0).rstrip('\n')
+    submissionDict["{0} ({1})".format(formattedName, username)] = TextBlob(str().join(lines).strip())
+
+# Build the .pdf, and .csv report files
+build_reports(assignName, collectiveBlob, submissionDict)
+
+exit(0)
