@@ -80,7 +80,7 @@ def build_reports(assignName, collectiveBlob, submissionDict):
 
     # Sentiment Analysis by text file/student, each student
     # on their own page
-    for name, blob in submissionDict.iteritems():
+    for name, blob in sorted(submissionDict.iteritems()):
 
         y  = TOP_OF_PAGE; pdfFile.drawString(STD_MARGIN, y, "Student Name: {}".format(name))
         y -= LINE_HEIGHT; pdfFile.drawString(STD_INDENT, y, "")
