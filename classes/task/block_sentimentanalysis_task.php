@@ -30,7 +30,6 @@
 
     defined('MOODLE_INTERNAL') || die();
 
-
     /**
      * For assignment ids specified in task custom data, export the
      * online-text submissions to individual files in a working dir
@@ -48,10 +47,13 @@
         {
             global $CFG, $DB;
 
-            // if no path has been specified, use default
+            // If no path has been specified, use default, i.e. rely on
+            // whatever is found in $PATH
             $block_config = get_config('block_sentimentanalysis');
             $pythonpath = empty($block_config->pythonpath) ? self::DEFAULT_PYTHON_PATH : $block_config->pythonpath;
 
+            // Create a temp working directory specifically for this
+            // task
             $taskdir = make_temp_directory("sentimentanalysis/{$this->get_id()}");
             if (!$taskdir) {
                 mtrace("... Unable to create task temporary directory.");
@@ -59,16 +61,29 @@
             }
 
             // Assignment id values passed in task's custom data as
-            // an array. Iterate over assignments and do the analysis,
-            // putting output in specific dir for each task/assignment
-            // combination.
+            // an array.
             $assignids = $this->get_custom_data();
-            foreach ($assignids as $assignid)
-            {
+            if (!$assignids) {
+                mtrace("... No assignment id values found for task.");
+                return;
+            }
 
+            // Iterate over assignment ids, exporting the submissions
+            // in a separate working dir for each assignment
+            foreach ($assignids as $assignid) {
+
+                // Validate the id and fetch the assignment name
                 $assignrec = $DB->get_record('assign', array('id' => $assignid));
                 if (!$assignrec) {
-                    mtrace("... Unable to create assign temporary directory.");
+                    mtrace("... Invalid assignment id: {$assignid}.");
+                    continue;
+                }
+
+                // Make temp directory and write all assignment submissions to it
+                // so the python script can just iterate over files in directory.
+                $assigndir = make_temp_directory("sentimentanalysis/{$this->get_id()}/{$assignid}");
+                if (!$assigndir) {
+                    mtrace("... Unable to create temporary directory for assignment: {$assignid}.");
                     continue;
                 }
 
@@ -81,32 +96,28 @@
                 $rs = $DB->get_recordset_sql($sql, array("assignid" => $assignid));
                 if (!$rs->valid()) {
                     $rs->close();
+                    mtrace("... No submissions found for assignment id: {$assignid}.");
                     continue;
                 }
 
-                // Make temp directory and write all assignment submissions to it
-                // so the python script can just iterate over files in directory.
-                $assigndir = make_temp_directory("sentimentanalysis/{$this->get_id()}/{$assignid}");
                 $collective = fopen("{$assigndir}/collective.txt", "w");
+                // First line of the collective file is assignment name
                 fwrite($collective, $assignrec->name . "\n");
 
-                // Create a text file for each submission with any HTML tags
-                // removed, and submit it for analysis
                 foreach ($rs as $record) {
-
+                    // Submission file.
                     $file = fopen("{$assigndir}/{$record->id}.txt", "w");
                     fwrite($file, "{$record->username}\n");
                     fwrite($file, "{$record->lastname}, {$record->firstname}\n");
                     fwrite($file, strip_tags($record->onlinetext));
                     fclose($file);
-
+                    // Collective file.
                     fwrite($collective, strip_tags($record->onlinetext) . "\n");
-
                 }
                 fclose($collective);
                 $rs->close();
 
-                // Execute python script to process the text submissions for this assignment.
+                // Execute python script to process the files.
                 $output = null;
                 $return = null;
 
@@ -191,9 +202,8 @@
             $message->subject           = 'Sentiment Analysis Complete';
             $message->fullmessageformat = FORMAT_PLAIN;
             $message->smallmessage      =
-            $message->fullmessage       =
-            $message->fullmessagehtml   = 'Please check the "Sentiment Analysis" folder in your private file area to view reports.';
-            $message->fullmessagehtml   = '<p>' . $message->fullmessagehtml . '</p>';
+            $message->fullmessage       = 'Please check the "Sentiment Analysis" folder in your private file area to view reports.';
+            $message->fullmessagehtml   = '<p>' . $message->fullmessage . '</p>';
 
             message_send($message);
 
