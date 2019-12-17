@@ -9,8 +9,6 @@ the text which indicates whether the text expresses a negative, neutral, or posi
 download the plugin to<br>
 `/pathtomoodle/blocks/sentimentanalysis`<br>
 This plugin runs a python 2.7 script (make sure it is installed). <br>
-From blocks/sentimentanalysis <br>
-`pip install -r requirements.txt`
 
 ### Configuration
 #### Python Path
