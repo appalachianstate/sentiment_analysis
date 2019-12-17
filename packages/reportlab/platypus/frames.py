@@ -1,6 +1,6 @@
 #Copyright ReportLab Europe Ltd. 2000-2017
 #see license.txt for license details
-#history https://bitbucket.org/rptlab/reportlab/history-node/tip/src/reportlab/platypus/frames.py
+#history https://hg.reportlab.com/hg-public/reportlab/log/tip/src/reportlab/platypus/frames.py
 
 __version__='3.5.14'
 
@@ -266,10 +266,10 @@ class Frame:
         da = None
         if ss:
             c = toColor(sb,-1)
-            ss = c is not -1
+            ss = c != -1
         elif isinstance(sb,ShowBoundaryValue) and sb:
             c = toColor(sb.color,-1)
-            ss = c is not -1
+            ss = c != -1
             if ss:
                 w = sb.width
                 da = sb.dashArray

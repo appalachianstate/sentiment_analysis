@@ -1,6 +1,6 @@
 #Copyright ReportLab Europe Ltd. 2000-2017
 #see license.txt for license details
-#history https://bitbucket.org/rptlab/reportlab/history-node/tip/src/reportlab/platypus/flowables.py
+#history https://hg.reportlab.com/hg-public/reportlab/log/tip/src/reportlab/platypus/flowables.py
 __version__='3.3.0'
 __doc__="""
 A flowable is a "floating element" in a document whose exact position is determined by the
@@ -30,7 +30,7 @@ from reportlab.lib.colors import red, gray, lightgrey
 from reportlab.lib.rl_accel import fp_str
 from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT, TA_JUSTIFY
 from reportlab.lib.styles import _baseFontName
-from reportlab.lib.utils import strTypes
+from reportlab.lib.utils import strTypes, safer_globals
 from reportlab.lib.abag import ABag
 from reportlab.pdfbase import pdfutils
 from reportlab.pdfbase.pdfmetrics import stringWidth
@@ -708,22 +708,25 @@ class KeepTogether(_ContainerSpace,Flowable):
     def split(self, aW, aH):
         if getattr(self,'_wrapInfo',None)!=(aW,aH): self.wrap(aW,aH)
         S = self._content[:]
-        cf = getattr(self,'_frame',None)
-        if cf: atTop = getattr(cf,'_atTop',None)
+        cf = atTop = getattr(self,'_frame',None)
+        if cf:
+            atTop = getattr(cf,'_atTop',None)
+            cAW = cf._width
+            cAH = cf._height
         C0 = self._H>aH and (not self._maxHeight or aH>self._maxHeight)
         C1 = (self._H0>aH) or C0 and atTop
         if C0 or C1:
             fb = False
+            panf = self._doctemplateAttr('_peekNextFrame')
+            if cf and panf:
+                nf = panf()
+                nAW = nf._width
+                nAH = nf._height
             if C0 and not (self.splitAtTop and atTop):
+                fb = not (atTop and cf and nf and cAW>=nAW and cAH>=nAH)
+            elif nf and nAW>=cf._width and nAH>=self._H:
                 fb = True
-            else:
-                panf = self._doctemplateAttr('_peekNextFrame')
-                if cf and panf:
-                    nf = panf()
-                    nAW = nf._width
-                    nAH = nf._height
-                    if nAW>=cf._width and nAH>=self._H:
-                        fb = True
+
             S.insert(0,(self.FrameBreak if fb else self.NullActionFlowable)())
         return S
 
@@ -752,7 +755,7 @@ class Macro(Flowable):
     def wrap(self, availWidth, availHeight):
         return (0,0)
     def draw(self):
-        exec(self.command, globals(), {'canvas':self.canv})
+        exec(self.command, safer_globals(), {'canvas':self.canv})
 
 def _nullCallable(*args,**kwds):
     pass
@@ -1521,7 +1524,7 @@ class BalancedColumns(_FindSplitterMixin,NullDraw):
         hgap = gap*0.5
         canv = self.canv
         nCols = self._nCols
-        cw = (aW - gap*(nCols-1))/float(nCols)
+        cw = (aW - gap*(nCols-1) - lpad - rpad)/float(nCols)
         aH0 = aH
         aH -= tpad + bpad
         W,H0,_C0,C2 = self._findSplit(canv,cw,nCols*aH,paraFix=False)

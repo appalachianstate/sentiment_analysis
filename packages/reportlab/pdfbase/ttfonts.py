@@ -128,6 +128,25 @@ GF_OVERLAP_COMPOUND             = 1 << 10
 GF_SCALED_COMPONENT_OFFSET      = 1 << 11
 GF_UNSCALED_COMPONENT_OFFSET    = 1 << 12
 
+
+_cached_ttf_dirs={}
+def _ttf_dirs(*roots):
+    R = _cached_ttf_dirs.get(roots,None)
+    if R is None:
+        join = os.path.join
+        realpath = os.path.realpath
+        R = []
+        aR = R.append
+        for root in roots:
+            for r, d, f in os.walk(root,followlinks=True):
+                s = realpath(r)
+                if s not in R: aR(s)
+                for s in d:
+                    s = realpath(join(r,s))
+                    if s not in R: aR(s)
+        _cached_ttf_dirs[roots] = R
+    return R
+
 def TTFOpenFile(fn):
     '''Opens a TTF file possibly after searching TTFSearchPath
     returns (filename,file)
@@ -139,7 +158,7 @@ def TTFOpenFile(fn):
     except IOError:
         import os
         if not os.path.isabs(fn):
-            for D in rl_config.TTFSearchPath:
+            for D in _ttf_dirs(*rl_config.TTFSearchPath):
                 tfn = os.path.join(D,fn)
                 if rl_isfile(tfn):
                     f = open_for_read(tfn,'rb')
@@ -808,7 +827,7 @@ class TTFontFile(TTFontParser):
         # (needs data from hhea, maxp, and cmap tables)
         self.seek_table("hmtx")
         aw = None
-        self.charWidths = {}
+        self.charWidths = charWidths = {}
         self.hmetrics = []
         for glyph in xrange(numberOfHMetrics):
             # advance width and left side bearing.  lsb is actually signed
@@ -820,7 +839,7 @@ class TTFontFile(TTFontParser):
                 self.defaultWidth = aw
             if glyph in glyphToChar:
                 for char in glyphToChar[glyph]:
-                    self.charWidths[char] = aw
+                    charWidths[char] = aw
         for glyph in xrange(numberOfHMetrics, numGlyphs):
             # the rest of the table only lists advance left side bearings.
             # so we reuse aw set by the last iteration of the previous loop
@@ -828,9 +847,10 @@ class TTFontFile(TTFontParser):
             self.hmetrics.append((aw, lsb))
             if glyph in glyphToChar:
                 for char in glyphToChar[glyph]:
-                    self.charWidths[char] = aw
+                    charWidths[char] = aw
 
         # loca - Index to location
+        if 'loca' not in self.table: raise TTFError('missing location table')
         self.seek_table('loca')
         self.glyphPos = []
         if indexToLocFormat == 0:
@@ -841,6 +861,12 @@ class TTFontFile(TTFontParser):
                 self.glyphPos.append(self.read_ulong())
         else:
             raise TTFError('Unknown location table format (%d)' % indexToLocFormat)
+        if 0x20 in charToGlyph:
+            charToGlyph[0xa0] = charToGlyph[0x20]
+            charWidths[0xa0] = charWidths[0x20]
+        elif 0xa0 in charToGlyph:
+            charToGlyph[0x20] = charToGlyph[0xa0]
+            charWidths[0x20] = charWidths[0xa0]
 
     # Subsetting
 
@@ -1111,6 +1137,7 @@ class TTFont:
             self.frozen = 0
             if getattr(getattr(ttf,'face',None),'_full_font',None):
                 C = set(self.charToGlyph.keys())
+                if 0xa0 in C: C.remove(0xa0)
                 for n in xrange(256):
                     if n in C:
                         A[n] = n
@@ -1187,6 +1214,7 @@ class TTFont:
         subsets = state.subsets
         reserveTTFNotdef = rl_config.reserveTTFNotdef
         for code in map(ord,text):
+            if code==0xa0: code = 32    #map nbsp into space
             if code in assignments:
                 n = assignments[code]
             else:
@@ -1275,3 +1303,11 @@ class TTFont:
             fontDict = doc.idToObject['BasicFonts'].dict
             fontDict[internalName] = pdfFont
         del self.state[doc]
+
+#preserve the initial values here
+def _reset():
+    _cached_ttf_dirs.clear()
+
+from reportlab.rl_config import register_reset
+register_reset(_reset)
+del register_reset

@@ -1,6 +1,6 @@
 #Copyright ReportLab Europe Ltd. 2000-2017
 #see license.txt for license details
-#history https://bitbucket.org/rptlab/reportlab/history-node/tip/src/reportlab/graphics/renderPS.py
+#history https://hg.reportlab.com/hg-public/reportlab/log/tip/src/reportlab/graphics/renderPS.py
 __version__='3.3.0'
 __doc__="""Render drawing objects in Postscript"""
 
@@ -918,8 +918,9 @@ def test(outDir='epsout',shout=False):
 
         for funcname in dir(testshapes):
             if funcname[0:10] == 'getDrawing':
-                drawing = eval('testshapes.' + funcname + '()')  #execute it
-                docstring = eval('testshapes.' + funcname + '.__doc__')
+                func = getattr(testshapes,funcname)
+                drawing = func()
+                docstring = getattr(func,'__doc__','')
                 drawings.append((drawing, docstring))
 
         i = 0

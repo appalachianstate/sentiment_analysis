@@ -230,13 +230,13 @@ class Lemma(_WordNetObject):
     'salt.n.03' has the Lemmas 'salt.n.03.salt', 'salt.n.03.saltiness' and
     'salt.n.03.salinity'.
 
-    Lemma attributes, accessible via methods with the same name::
+    Lemma attributes, accessible via methods with the same name:
 
     - name: The canonical name of this lemma.
     - synset: The synset that this lemma belongs to.
     - syntactic_marker: For adjectives, the WordNet string identifying the
       syntactic position relative modified noun. See:
-      http://wordnet.princeton.edu/man/wninput.5WN.html#sect10
+      https://wordnet.princeton.edu/documentation/wninput5wn
       For all other parts of speech, this attribute is None.
     - count: The frequency of this lemma in wordnet.
 
@@ -244,7 +244,7 @@ class Lemma(_WordNetObject):
 
     Lemmas have the following methods for retrieving related Lemmas. They
     correspond to the names for the pointer symbols defined here:
-    http://wordnet.princeton.edu/man/wninput.5WN.html#sect3
+    https://wordnet.princeton.edu/documentation/wninput5wn
     These methods all return lists of Lemmas:
 
     - antonyms
@@ -372,7 +372,7 @@ class Synset(_WordNetObject):
 
     Synsets have the following methods for retrieving related Synsets.
     They correspond to the names for the pointer symbols defined here:
-    http://wordnet.princeton.edu/man/wninput.5WN.html#sect3
+    https://wordnet.princeton.edu/documentation/wninput5wn
     These methods all return lists of Synsets.
 
     - hypernyms, instance_hypernyms
@@ -1401,16 +1401,13 @@ class WordNetCorpusReader(CorpusReader):
         try:
 
             # parse out the definitions and examples from the gloss
-            columns_str, gloss = data_file_line.split('|')
-            gloss = gloss.strip()
-            definitions = []
-            for gloss_part in gloss.split(';'):
-                gloss_part = gloss_part.strip()
-                if gloss_part.startswith('"'):
-                    synset._examples.append(gloss_part.strip('"'))
-                else:
-                    definitions.append(gloss_part)
-            synset._definition = '; '.join(definitions)
+            columns_str, gloss = data_file_line.strip().split('|')
+            definition = re.sub(r"[\"].*?[\"]", "", gloss).strip()
+            examples = re.findall(r'"([^"]*)"', gloss)
+            for example in examples:
+                synset._examples.append(example)
+
+            synset._definition = definition.strip('; ')
 
             # split the other info into fields
             _iter = iter(columns_str.split())
@@ -1523,7 +1520,7 @@ class WordNetCorpusReader(CorpusReader):
         Retrieves synset based on a given sense_key. Sense keys can be
         obtained from lemma.key()
 
-        From https://wordnet.princeton.edu/wordnet/man/senseidx.5WN.html:
+        From https://wordnet.princeton.edu/documentation/senseidx5wn:
         A sense_key is represented as:
             lemma % lex_sense (e.g. 'dog%1:18:01::')
         where lex_sense is encoded as:
@@ -1648,7 +1645,7 @@ class WordNetCorpusReader(CorpusReader):
                     continue
                 lemma.extend(self._lang_data[lang][0][i])
 
-            lemma = list(set(lemma))
+            lemma = iter(set(lemma))
             return lemma
 
     def all_synsets(self, pos=None):
@@ -1999,17 +1996,16 @@ class WordNetCorpusReader(CorpusReader):
         if len(lang) != 3:
             raise ValueError('lang should be a (3 character) ISO 639-3 code')
         self._lang_data[lang] = [defaultdict(list), defaultdict(list)]
-        for l in tab_file.readlines():
-            if isinstance(l, bytes):
+        for line in tab_file.readlines():
+            if isinstance(line, bytes):
                 # Support byte-stream files (e.g. as returned by Python 2's
                 # open() function) as well as text-stream ones
-                l = l.decode('utf-8')
-            l = l.replace('\n', '')
-            l = l.replace(' ', '_')
-            if l[0] != '#':
-                word = l.split('\t')
-                self._lang_data[lang][0][word[0]].append(word[2])
-                self._lang_data[lang][1][word[2].lower()].append(word[0])
+                line = line.decode('utf-8')
+            if not line.startswith('#'):
+                offset_pos, lemma_type, lemma  = line.strip().split('\t')
+                lemma = lemma.strip().replace(' ', '_')
+                self._lang_data[lang][0][offset_pos].append(lemma)
+                self._lang_data[lang][1][lemma.lower()].append(offset_pos)
         # Make sure no more entries are accidentally added subsequently
         self._lang_data[lang][0].default_factory = None
         self._lang_data[lang][1].default_factory = None

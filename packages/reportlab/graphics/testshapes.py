@@ -1,7 +1,7 @@
 #!/bin/env python
 #Copyright ReportLab Europe Ltd. 2000-2017
 #see license.txt for license details
-#history https://bitbucket.org/rptlab/reportlab/history-node/tip/src/reportlab/graphics/testshapes.py
+#history https://hg.reportlab.com/hg-public/reportlab/log/tip/src/reportlab/graphics/testshapes.py
 
 # testshapes.py - draws shapes onto a PDF canvas.
 
@@ -487,11 +487,14 @@ def getAllFunctionDrawingNames(doTTF=1):
     return funcNames
 
 def _evalFuncDrawing(name, D, l=None, g=None):
+    if g is None: g = globals()
+    if l is None: l = locals()
+    func = l.get(name,g.get(name,None))
     try:
-        d = eval(name + '()', g or globals(), l or locals())
+        d = func()
     except:
         d = getFailedDrawing(name)
-    D.append((d, eval(name + '.__doc__'), name[3:]))
+    D.append((d, getattr(func,'.__doc__',''), name[3:]))
 
 def getAllTestDrawings(doTTF=1):
     D = []

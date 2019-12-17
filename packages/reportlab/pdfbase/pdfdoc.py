@@ -1,6 +1,6 @@
 #Copyright ReportLab Europe Ltd. 2000-2017
 #see license.txt for license details
-#history https://bitbucket.org/rptlab/reportlab/history-node/tip/src/reportlab/pdfbase/pdfdoc.py
+#history https://hg.reportlab.com/hg-public/reportlab/log/tip/src/reportlab/pdfbase/pdfdoc.py
 __version__='3.4.1'
 __doc__="""
 The module pdfdoc.py handles the 'outer structure' of PDF documents, ensuring that
@@ -131,6 +131,7 @@ class PDFDocument(PDFObject):
                  invariant=rl_config.invariant,
                  filename=None,
                  pdfVersion=PDF_VERSION_DEFAULT,
+                 lang=None,
                  ):
         self._ID = None
         self.objectcounter = 0
@@ -163,6 +164,9 @@ class PDFDocument(PDFObject):
         cat = self.Catalog = self._catalog = PDFCatalog()
         pages = self.Pages = PDFPages()
         cat.Pages = pages
+        lang = lang if lang else rl_config.documentLang
+        if lang:
+            cat.Lang = PDFString(lang)
         self.outline = self.Outlines = cat.Outlines = PDFOutlines0() if dummyoutline else PDFOutlines()
         self.info = PDFInfo()
         #self.Reference(self.Catalog)
@@ -593,7 +597,7 @@ class PDFString(PDFObject):
         s = self.s
         enc = getattr(self,'enc','auto')
         if isBytes(s):
-            if enc is 'auto':
+            if enc == 'auto':
                 try:
                     if s.startswith(codecs.BOM_UTF16_BE):
                         u = s.decode('utf_16_be')
@@ -612,7 +616,7 @@ class PDFString(PDFObject):
                         stderr.write('Error in %s' % (repr(s),))
                         raise
         elif isUnicode(s):
-            if enc is 'auto':
+            if enc == 'auto':
                 if _checkPdfdoc(s):
                     s = s.encode('pdfdoc')
                 else:
@@ -1858,17 +1862,13 @@ class PDFDestinationFitR(PDFObject):
 
 class PDFResourceDictionary(PDFObject):
     """each element *could* be reset to a reference if desired"""
-    def __init__(self):
-        self.ColorSpace = {}
-        self.XObject = {}
-        self.ExtGState = {}
-        self.Font = {}
-        self.Pattern = {}
-        self.ProcSet = []
-        self.Properties = {}
-        self.Shading = {}
-        # ?by default define the basicprocs
+    def __init__(self,**kwds):
+        for _ in self.dict_attributes:
+            setattr(self,_,kwds.pop(_,{}))
+        # define the basicprocs
         self.basicProcs()
+        if 'ProcSet' in kwds:
+            self.ProcSet= kwds.pop('ProcSet')
     stdprocs = [PDFName(s) for s in "PDF Text ImageB ImageC ImageI".split()]
     dict_attributes = ("ColorSpace", "XObject", "ExtGState", "Font", "Pattern", "Properties", "Shading")
 
@@ -2150,7 +2150,7 @@ class PDFImageXObject(PDFObject):
         self._filters = 'FlateDecode', #'Fl'
         if IMG: self._checkTransparency(IMG[0])
         elif self.mask=='auto': self.mask = None
-        self.streamContent = ''.join(imagedata[3:-1])
+        self.streamContent = b''.join(imagedata[3:-1])
 
     def _checkTransparency(self,im):
         if self.mask=='auto':

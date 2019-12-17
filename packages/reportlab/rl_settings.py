@@ -63,7 +63,9 @@ hyphenationLang
 uriWasteReduce
 embeddedHyphenation
 hyphenationMinWordLength
-reserveTTFNotdef'''.split())
+reserveTTFNotdef
+documentLang
+encryptionStrength'''.split())
 
 allowTableBoundsErrors =    1 # set to 0 to die on too large elements in tables in debug (recommend 1 for production use)
 shapeChecking =             1
@@ -148,8 +150,11 @@ uriWasteReduce=0                                    #split URI if we would waste
                                                     #is attempted. suggested value = 0.3
 embeddedHyphenation=0                               #if true attempt hypenation of words with embedded hyphens
 hyphenationMinWordLength=5                          #minimum length of words that can be hyphenated
-reserveTTFNotdef=0                                  #if true force subset elemement 0 to be zero(.notdef)
+reserveTTFNotdef=0                                  #if true force subset element 0 to be zero(.notdef)
                                                     #helps to fix bug in edge
+documentLang=None                                   #pdf document catalog Lang value xx-xx not ee_xx
+encryptionStrength=40                               #the bits for standard encryption 40, 128 or 256 (AES)
+
 
 # places to look for T1Font information
 T1SearchPath =  (

@@ -1,6 +1,6 @@
 #Copyright ReportLab Europe Ltd. 2000-2017
 #see license.txt for license details
-#history https://bitbucket.org/rptlab/reportlab/history-node/tip/src/reportlab/platypus/doctemplate.py
+#history https://hg.reportlab.com/hg-public/reportlab/log/tip/src/reportlab/platypus/doctemplate.py
 __all__ = (
         'ActionFlowable',
         'BaseDocTemplate',
@@ -981,6 +981,7 @@ class BaseDocTemplate:
                             artBox = self.artBox,
                             trimBox = self.trimBox,
                             bleedBox = self.bleedBox,
+                            lang = self.lang,
                             )
 
         getattr(canv,'setEncrypt',lambda x: None)(self.encrypt)
@@ -994,8 +995,6 @@ class BaseDocTemplate:
         canv.setKeywords(self.keywords)
         if self.displayDocTitle is not None:
             canv.setViewerPreference('DisplayDocTitle',['false','true'][self.displayDocTitle])
-        if self.lang:
-            canv.setCatalogEntry('Lang',self.lang)
 
         if self._onPage:
             canv.setPageCallBack(self._onPage)
@@ -1216,7 +1215,7 @@ class BaseDocTemplate:
         try:
             if lifetime not in self._allowedLifetimes:
                 raise ValueError('bad lifetime %r not in %r'%(lifetime,self._allowedLifetimes))
-            exec(stmt, {},NS)
+            exec(stmt, NS)
         except:
             for k in NS.keys():
                 if k not in K0:

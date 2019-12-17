@@ -1,6 +1,6 @@
 #Copyright ReportLab Europe Ltd. 2000-2017
 #see license.txt for license details
-#history https://bitbucket.org/rptlab/reportlab/history-node/tip/src/reportlab/platypus/paraparser.py
+#history https://hg.reportlab.com/hg-public/reportlab/log/tip/src/reportlab/platypus/paraparser.py
 __all__ = ('ParaFrag', 'ParaParser')
 __version__='3.5.20'
 __doc__='''The parser used to process markup within paragraphs'''
@@ -106,9 +106,6 @@ class _PCT(float):
 
     def __deepcopy__(self,mem):
         return self.__copy__()
-
-class _LinkValue(unicodeT):
-    pass
 
 def fontSizeNormalize(frag,attr,default):
     if not hasattr(frag,attr): return default
@@ -2670,7 +2667,7 @@ class ParaParser(HTMLParser):
         underline = A.pop('underline',self._defaultLinkUnderline)
         A['link'] = self._stack[-1].link + [(
                         self.nlinks,
-                        _LinkValue(A.pop('link','').strip()),
+                        A.pop('link','').strip(),
                         )]
         self.nlinks += 1
         self._push(tag,**A)
@@ -2812,7 +2809,11 @@ class ParaParser(HTMLParser):
                 v = '\0'
         elif 'code' in attr:
             try:
-                v = int(eval(attr['code']))
+                v = attr['code'].lower()
+                if v.startswith('0x'):
+                    v = int(v,16)
+                else:
+                    v = int(v,0)    #treat as a python literal would be
                 v = chr(v) if isPy3 else unichr(v)
             except:
                 self._syntax_error('<unichar/> invalid code attribute %s' % ascii(attr['code']))

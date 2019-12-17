@@ -1,6 +1,6 @@
 #Copyright ReportLab Europe Ltd. 2000-2017
 #see license.txt for license details
-#history https://bitbucket.org/rptlab/reportlab/history-node/tip/src/reportlab/platypus/paragraph.py
+#history https://hg.reportlab.com/hg-public/reportlab/log/tip/src/reportlab/platypus/paragraph.py
 __all__=(
         'Paragraph',
         'cleanBlockQuotedText',
@@ -13,7 +13,7 @@ from string import whitespace
 from operator import truth
 from unicodedata import category
 from reportlab.pdfbase.pdfmetrics import stringWidth, getFont, getAscentDescent
-from reportlab.platypus.paraparser import ParaParser, _PCT, _num as _parser_num, _re_us_value, _LinkValue
+from reportlab.platypus.paraparser import ParaParser, _PCT, _num as _parser_num, _re_us_value
 from reportlab.platypus.flowables import Flowable
 from reportlab.lib.colors import Color
 from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER, TA_JUSTIFY
@@ -1235,18 +1235,20 @@ def _do_under_line(i, x1, ws, tx, us_lines):
 
 _scheme_re = re.compile('^[a-zA-Z][-+a-zA-Z0-9]+$')
 def _doLink(tx,link,rect):
-    parts = link.split(':',1)
-    scheme = len(parts)==2 and parts[0].lower() or ''
-    if _scheme_re.match(scheme) and scheme!='document' or isinstance(link,_LinkValue):
-        kind=scheme.lower()=='pdf' and 'GoToR' or 'URI'
-        if kind=='GoToR': link = parts[1]
-        tx._canvas.linkURL(link, rect, relative=1, kind=kind)
+    if not link: return
+    if link.startswith('#'):
+        tx._canvas.linkRect("", link[1:], rect, relative=1)
     else:
-        if not link: return
-        if link[0]=='#':
-            link = link[1:]
-            scheme=''
-        tx._canvas.linkRect("", scheme!='document' and link or parts[1], rect, relative=1)
+        parts = link.split(':',1)
+        scheme = len(parts)==2 and parts[0].lower() or ''
+        if scheme=='document':
+            tx._canvas.linkRect("", parts[1], rect, relative=1)
+        elif _scheme_re.match(scheme):
+            kind=scheme.lower()=='pdf' and 'GoToR' or 'URI'
+            if kind=='GoToR': link = parts[1]
+            tx._canvas.linkURL(link, rect, relative=1, kind=kind)
+        else:
+            tx._canvas.linkURL(link, rect, relative=1, kind='URI')
 
 def _do_link_line(i, t_off, ws, tx):
     xs = tx.XtraState
@@ -1702,7 +1704,11 @@ class Paragraph(Flowable):
         P1=self.__class__(None,style1,bulletText=self.bulletText,frags=func(blPara,0,s))
         #this is a major hack
         P1.blPara = ParaLines(kind=1,lines=blPara.lines[0:s],aH=availHeight,aW=availWidth)
-        P1._JustifyLast = 1
+        #do not justify text if linebreak was inserted after the text
+        #bug reported and fix contributed by Niharika Singh <nsingh@shoobx.com>
+        P1._JustifyLast = not (isinstance(blPara.lines[s-1],FragLine)
+                                and hasattr(blPara.lines[s-1], 'lineBreak')
+                                and blPara.lines[s-1].lineBreak)
         P1._splitpara = 1
         P1.height = height
         P1.width = availWidth
