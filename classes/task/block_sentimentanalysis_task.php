@@ -47,6 +47,8 @@
         {
             global $CFG, $DB;
 
+            $now = time();
+
             // If no path has been specified, use default, i.e. rely on
             // whatever is found in $PATH
             $block_config = get_config('block_sentimentanalysis');
@@ -68,6 +70,8 @@
                 return;
             }
 
+            mtrace("... Task configured to process assign ids: " . implode(",",$assignids));
+
             // Iterate over assignment ids, exporting the submissions
             // in a separate working dir for each assignment
             foreach ($assignids as $assignid) {
@@ -78,6 +82,8 @@
                     mtrace("... Invalid assignment id: {$assignid}.");
                     continue;
                 }
+
+                mtrace("... Processing assign id {$assignid}: {$assignrec->name}.");
 
                 // Make temp directory and write all assignment submissions to it
                 // so the python script can just iterate over files in directory.
@@ -91,7 +97,8 @@
                     FROM mdl_assignsubmission_onlinetext olt
                     INNER JOIN mdl_assign_submission sub ON sub.id = olt.submission
                     INNER JOIN mdl_user usr ON usr.id = sub.userid
-                    WHERE olt.assignment = :assignid AND sub.status = 'submitted'";
+                    WHERE olt.assignment = :assignid AND sub.status = 'submitted'
+                    ORDER BY usr.username";
 
                 $rs = $DB->get_recordset_sql($sql, array("assignid" => $assignid));
                 if (!$rs->valid()) {
@@ -123,15 +130,15 @@
 
                 exec("export PYTHONPATH='{$CFG->dirroot}/blocks/sentimentanalysis/packages'; {$pythonpath} {$CFG->dirroot}/blocks/sentimentanalysis/sentimentanalysis.py '{$assigndir}'", $output, $return);
                 if ($return != 0) {
-                    mtrace("... Sentiment analylsis failed on task id {$this->get_id()}, assign id {$record->id}.");
+                    mtrace("... Processing failed for assign id {$assignid}.");
                     continue;
                 }
 
-                mtrace("... Sentiment analylsis completed.");
+                mtrace("... Processing complete for assign id {$assignid}.");
 
                 // Create file records to save the files produced by the python script
                 // into the teacher's private file area.
-                $this->create_file_records($assigndir, $assignrec->name);
+                $this->create_file_records($assigndir, $assignrec->name, $now);
 
             }
 
@@ -148,10 +155,8 @@
          * @param string $assigndir Path to the task-assignment working directory
          * @param string $assignname Assignment name
          */
-        private function create_file_records($assigndir, $assignname)
+        private function create_file_records($assigndir, $assignname, $taskruntime)
         {
-
-            $now = time();
 
             //$filename, $assignmentdir, $assign_name, $datetime, $ext
             $fs = get_file_storage();
@@ -169,7 +174,7 @@
                 $record = new stdClass();
                 $record->filearea   = "private";
                 $record->component  = "user";
-                $record->filepath   = "/Sentiment Analysis/Task-{$this->get_id()} (" . date("m-d-y Hi", $now) . ")/";
+                $record->filepath   = "/Sentiment Analysis/Task-{$this->get_id()} (" . date("m-d-y Hi", $taskruntime) . ")/";
                 $record->itemid     = 0;
                 $record->contextid  = $context->id;
                 $record->userid     = $userid;
